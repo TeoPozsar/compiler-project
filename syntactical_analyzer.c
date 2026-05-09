@@ -7,14 +7,7 @@
 
 enum{ID, END, CT_INT, ASSIGN, SEMICOLON , CT_REAL, EQUAL , CT_CHAR , CT_STRING,
 COMMA , LPAR , RPAR , LBRACKET , RBRACKET , LACC, RACC,ADD, SUB , MUL , DIV , DOT ,AND, OR,
-NOT , LESS, LESS_EQ , MORE , MORE_EQ , DIFF , INT ,DOUBLE , CHAR , STRUCT , VOID , IF , ELSE , WHILE , RETURN,}; // tokens codes 
-
-enum {
-    CLS_VAR , CLS_FUNC , CLS_EXTFUNC, CLS_STRUCT  //symbol classes
-};
-
-enum {TB_VOID , TB_INT , TB_DOUBLE , TB_CHAR , TB_STRUCT}; //base types
-
+NOT , LESS, LESS_EQ , MORE , MORE_EQ , DIFF , INT ,DOUBLE , CHAR , STRUCT , VOID , IF , ELSE , WHILE , RETURN}; // tokens codes 
  
 typedef struct _Token{ 
  int   code;     // code (name) 
@@ -28,103 +21,6 @@ typedef struct _Token{
  }Token; 
 
  Token *crtTk;
-
-
-typedef struct Symbol{  //domain analyzerf
-    const char *name;
-    int cls;
-    int depth;
-    Type type;
-    struct Symbol *next;
-}Symbol;
-
-typedef struct {
-    Symbol *begin;
-    Symbol *end;
-}Symbols;
-
-Symbols symbols;
-int crtDepth=0;
-
-
-typedef struct Type{
-    int tb; //base type
-    struct Symbol *s; //pentru struct types
-    int n; //array size
-
-}Type;
-
-void initSymbols(Symbols *s)
-{
-    s->begin = NULL;
-    s->end = NULL;
-}
-
-
-Symbol *addSymbol(Symbols *s, const char *name, int cls)
-{
-    Symbol *sym = (Symbol*)malloc(sizeof(Symbol));
-    if (!sym) err("not enough memory");
-
-    sym->name = name;
-    sym->cls = cls;
-    sym->depth = crtDepth;
-    sym->next = NULL;
-
-    if (s->end) {
-        s->end->next = sym;
-    } else {
-        s->begin = sym;
-    }
-
-    s->end = sym;
-
-    return sym;
-}
-
-Symbol *findSymbol(Symbols *s, const char *name)
-{
-    Symbol *found = NULL;
-
-    for (Symbol *sym = s->begin; sym; sym = sym->next) {
-        if (strcmp(sym->name, name) == 0)
-            found = sym;
-    }
-
-    return found;
-}
-
-
-void deleteSymbolsAfter(Symbols *s, int depth)
-{
-    while (s->end && s->end->depth >= depth) {
-
-        Symbol *prev = NULL;
-        Symbol *curr = s->begin;
-
-        while (curr && curr->next) {
-            prev = curr;
-            curr = curr->next;
-        }
-
-        if (prev)
-            prev->next = NULL;
-        else
-            s->begin = NULL;
-
-        s->end = prev;
-        free(curr);
-    }
-}
-
-Symbol *findSymbolInCurrentScope(Symbols *s, const char *name)
-{
-    for (Symbol *sym = s->begin; sym; sym = sym->next) {
-        if (sym->depth == crtDepth && strcmp(sym->name, name) == 0)
-            return sym;
-    }
-    return NULL;
-}
 
  void err(const char *fmt,...) 
 { 
@@ -595,12 +491,7 @@ int  getNextToken()
 
 
 
-// src reads the original string
-// len counts decoded size
-// malloc(len+1) allocates memory
-// dst writes decoded chars
-// escapes like \n, \t, \", \\ become real characters
-// '\0' ends the final string
+
 }
     
     case 21: addTk(COMMA); return COMMA;
@@ -910,7 +801,6 @@ void printTokens(const Token *tk) //trec prin token list si print line number , 
 
 
 Token *consumedTk; 
-
 int  consume(int code) 
 { 
   if(crtTk->code==code){ 
@@ -925,58 +815,34 @@ int  consume(int code)
 int stm();
 int expr();
 
-int typeBase( Type *t)  //tipuri de variabile 
+int typeBase()  //tipuri de variabile 
 {
-    //int 
-    if( consume(INT)) 
-    {
-        t->tb=TB_INT;
-        t->n =-1; // -1 pt ca nu e array
-        return 1;
-    }
+    
+    if( consume(INT)) return 1;
 
-    //double
-     if( consume(DOUBLE)) 
-     {
-        t->tb=TB_DOUBLE;
-        t->n =-1; // -1 pt ca nu e array
-        return 1;
-     }
+    
+     if( consume(DOUBLE)) return 1;
 
-    //char
-     if( consume(CHAR)) 
-     {
-        t->tb=TB_CHAR;
-        t->n =-1; 
-        return 1;
-     }
-
+    
+     if( consume(CHAR)) return 1;
     
     // struct id
     if (consume(STRUCT)) {
-        if (!consume(ID))  tkerr(crtTk, "missing ID after STRUCT");
-
-        Symbol *s= findSymbol(&symbols, consumedTk->text);
-         if (!s || s->cls != CLS_STRUCT)
-            tkerr(crtTk, "undefined struct");
-
-        t->tb = TB_STRUCT;
-        t->s = s;
-        t->n = -1;
-        return 1;
-           
-       
+        if (consume(ID)) {
+            return 1;
+        } else {
+            tkerr(crtTk, "missing ID after STRUCT");
+        }
     }
+
     return 0;
 }
 
 
-int arrayDecl(Type *t) {
+int arrayDecl() {
     if (!consume(LBRACKET)) return 0;
 
-    if(consume(CT_INT)) 
-      t->n=consumedTk->i;
-    else t->n=0; //unspecified size
+    consume(CT_INT); // optional
 
     if (!consume(RBRACKET))
         tkerr(crtTk, "missing ]");
@@ -985,23 +851,15 @@ int arrayDecl(Type *t) {
 }
 
 int varDef()
-{   
-    Type t;
-
-    if(!typeBase(&t)) //sa fie int , char,double sau struct
+{
+    if(!typeBase()) //sa fie int , char,double sau struct
      return 0;
     
      if(!consume(ID))  //dupa type trebuie sa avem nume
       tkerr(crtTk , "missing ID");
 
-     if (findSymbolInCurrentScope(&symbols, consumedTk->text))
-      tkerr(crtTk, "symbol redefinition");
-
-    Symbol *sym= addSymbol(&symbols, consumedTk->text, CLS_VAR);
-    sym->type=t;
-
-
-    arrayDecl(&sym->type); //in caz ca e array
+      
+    arrayDecl(); //in caz ca e array
 
     if(!consume(SEMICOLON)) //sa aiba ; la final
      tkerr(crtTk , "missing ;");
@@ -1051,8 +909,6 @@ int stmCompound()
 {
     if (!consume(LACC)) return 0;
 
-    crtDepth++;
-
     while (1) {
         if (varDef()) continue;
         if (stm()) continue;
@@ -1061,10 +917,6 @@ int stmCompound()
 
     if (!consume(RACC))
         tkerr(crtTk, "missing }");
-
-
-    deleteSymbolsAfter(&symbols , crtDepth);
-    crtDepth--;
 
     return 1;
 }
@@ -1077,11 +929,6 @@ int fnParam()
     if (!consume(ID))
         tkerr(crtTk, "missing parameter name");
 
-    if (findSymbolInCurrentScope(&symbols, consumedTk->text))
-    tkerr(crtTk, "parameter redefinition");
-
-    addSymbol(&symbols, consumedTk->text, CLS_VAR);
-
     arrayDecl(); // optional
 
     return 1;
@@ -1092,29 +939,28 @@ int fnDef()
 {
     Token *startTk = crtTk;
 
-    if (typeBase() || consume(VOID)) {
+    
+    if (typeBase()) {
+        // ok
+    } else if (consume(VOID)) {
+        // ok
     } else {
         return 0;
     }
 
+    // function name
     if (!consume(ID)) {
         crtTk = startTk;
         return 0;
     }
 
-    if (findSymbolInCurrentScope(&symbols, consumedTk->text))
-        tkerr(crtTk, "function redefinition");
-
-    addSymbol(&symbols, consumedTk->text, CLS_FUNC);
-
+    //must have '(' to be a function
     if (!consume(LPAR)) {
         crtTk = startTk;
         return 0;
     }
 
-    crtDepth++;  
-
-    // parameters
+    // ( fnParam ( , fnParam )* )?
     if (fnParam()) {
         while (consume(COMMA)) {
             if (!fnParam())
@@ -1122,15 +968,13 @@ int fnDef()
         }
     }
 
+    // )
     if (!consume(RPAR))
         tkerr(crtTk, "missing )");
 
+    // function body
     if (!stmCompound())
         tkerr(crtTk, "missing function body");
-
-    
-
-    crtDepth--;
 
     return 1;
 }
@@ -1225,21 +1069,16 @@ int stm()  //statement
      
 } 
 
-
-
-
-
-
 int unit()
 {
     while (1) {
-        Token *startTk = crtTk;
+        Token *startTk = crtTk; 
 
         if (structDef()) continue;
         if (fnDef()) continue;
         if (varDef()) continue;
 
-        if (crtTk == startTk) break;
+        if (crtTk == startTk) break; //daca nu a mers nici struct nici functie nici variabila  , nu putem sa parsam nimic 
     }
 
     if (!consume(END))
@@ -1251,9 +1090,7 @@ int unit()
 int exprPrimary()
 {
     if(consume(ID))
-    {  if (!findSymbol(&symbols, consumedTk->text))
-        tkerr(crtTk, "undefined symbol");
-
+    {
         if(consume(LPAR))
         {
             if(expr())
@@ -1296,12 +1133,10 @@ int exprPrimary()
 
 }
 
-int exprPostfix()
+
+int exprPostfix1()
 {
-    if(!exprPrimary()) return 0;
-
-
-    while(1)
+     while(1)
     {
     if(consume(LBRACKET))
     {
@@ -1329,6 +1164,14 @@ int exprPostfix()
    return 1;
 }
 
+int exprPostfix()   
+{
+    if(!exprPrimary()) return 0;
+    return exprPostfix1();
+    
+
+}
+
 
 
 int exprUnary()
@@ -1347,7 +1190,7 @@ int exprUnary()
 }
 
 
-int exprCast()
+int exprCast() 
 {
     Token *startTk= crtTk;
 
@@ -1357,15 +1200,16 @@ int exprCast()
         {
             arrayDecl();
 
-            if(consume(RPAR))
-            {
-                if(!exprCast())
+            if(!consume(RPAR))
+              tkerr(crtTk, "missing )"); 
+                
+            if(!exprCast())
                 {
                      tkerr(crtTk, "missing expression after cast"); 
                 }
                  
-                return 1;
-            }
+            return 1;
+            
         }
 
         //nu i cast , deci e unary
@@ -1376,13 +1220,9 @@ int exprCast()
 
 }
 
-
-
-int exprMul()
+int exprMul1()
 {
-    if(!exprCast())  return 0;
-
-      while(consume(MUL) || consume(DIV))
+    while(consume(MUL) || consume(DIV))
         {
             if(!exprCast())
               tkerr(crtTk, "missing expression after */ /");
@@ -1392,14 +1232,18 @@ int exprMul()
     return 1;
 }
 
-
-
-int exprAdd()
+int exprMul() 
 {
-    if(!exprMul()) return 0;
+    if(!exprCast())  return 0;
+    return exprMul1();
+    
+     
+}
 
-   
-        while(consume(ADD) || consume(SUB))
+
+int exprAdd1()
+{
+    while(consume(ADD) || consume(SUB))
         {
             if(!exprMul())
                tkerr(crtTk, "missing expression after +/- ");
@@ -1410,11 +1254,17 @@ int exprAdd()
     return 1;
 }
 
-
-int exprRel()
+int exprAdd()  
 {
-     if(!exprAdd())  return 0;
+    if(!exprMul()) return 0;
+    return exprAdd1();
 
+   
+        
+}
+
+int exprRel1()
+{
     while(consume(LESS) || consume(LESS_EQ) || consume(MORE) || consume(MORE_EQ))
         {
             if(!exprAdd())
@@ -1424,12 +1274,17 @@ int exprRel()
      return 1;
 }
 
-
-int exprEq()
+int exprRel()
 {
-   if(!exprRel()) return 0;
+     if(!exprAdd())  return 0;
+     return exprRel1();
+    
+}
 
-   while(consume(EQUAL) || consume(DIFF))
+
+int exprEq1()
+{
+    while(consume(EQUAL) || consume(DIFF))
       {
         if(!exprRel())
            tkerr(crtTk, "missing expression after =/!=");
@@ -1439,27 +1294,38 @@ int exprEq()
    return 1;
 }
 
-
-
-
-int exprAnd()
+int exprEq() 
 {
-    if (!exprEq()) return 0;
+   if(!exprRel()) return 0;
+   return exprEq1();
 
-    while (consume(AND)) {
+   
+}
+
+
+int exprAnd1()
+{
+     while (consume(AND)) {
         if (!exprEq())
             tkerr(crtTk, "missing expression after &&");
     }
 
     return 1;
+}
+
+int exprAnd()  
+{
+    if (!exprEq()) return 0;
+    return exprAnd1();
+
+
 
 }
 
-int exprOr()
-{
-    if (!exprAnd()) return 0;
 
-    while (consume(OR)) {
+int exprOr1()
+{
+  while (consume(OR)) {
         if (!exprAnd())
             tkerr(crtTk, "missing expression after ||");
     }
@@ -1468,35 +1334,36 @@ int exprOr()
 }
 
 
-
-int exprAssign(Type *t)
+int exprOr()  
 {
-    Token *startTk = crtTk;
-    Type t1, t2;
+    if (!exprAnd()) return 0;
+    return exprOr1();
 
-    
-    if (exprUnary(&t1)) {
-        if (consume(ASSIGN)) {
-            if (!exprAssign(&t2))
-                tkerr(crtTk, "missing expression after =");
-
-           
-            if (t1.tb != t2.tb)  //check compatibility
-                tkerr(crtTk, "incompatible types in assignment");
-
-            *t = t1;   // result type = left side
-            return 1;
-        }
-    }
-
-    // not assignment → fallback
-    crtTk = startTk;
-    return exprOr(t);
 }
 
-int expr( Type *t)
+
+
+int exprAssign()
 {
-    return exprAssign(t);
+    Token *startTk= crtTk;
+
+    //exprUnary ASSIGN exprAssign
+    if(exprUnary()){
+      if(consume(ASSIGN)){
+        if(!exprAssign())
+          tkerr(crtTk,"missing expression after =");
+        return 1;
+      }
+    }
+
+    //daca nu i assignment
+    crtTk=startTk;
+    return exprOr();
+}
+
+int expr()
+{
+    return exprAssign();
 }
 
 
@@ -1547,7 +1414,6 @@ void freeTokens(Token *tk)
 int main(int argc, char **argv)
 {
     char *buf;
-    
 
     if (argc != 2) {
         fprintf(stderr, "usage: %s file.c\n", argv[0]);
@@ -1565,7 +1431,6 @@ int main(int argc, char **argv)
     }
 
     crtTk = tokens;
-    initSymbols(&symbols);
 
     if (!unit()) {
     tkerr(crtTk, "invalid syntax");
