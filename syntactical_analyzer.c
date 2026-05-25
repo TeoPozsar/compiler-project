@@ -7,7 +7,7 @@
 
 enum{ID, END, CT_INT, ASSIGN, SEMICOLON , CT_REAL, EQUAL , CT_CHAR , CT_STRING,
 COMMA , LPAR , RPAR , LBRACKET , RBRACKET , LACC, RACC,ADD, SUB , MUL , DIV , DOT ,AND, OR,
-NOT , LESS, LESS_EQ , MORE , MORE_EQ , DIFF , INT ,DOUBLE , CHAR , STRUCT , VOID , IF , ELSE , WHILE , RETURN}; // tokens codes 
+NOT , LESS, LESS_EQ , MORE , MORE_EQ , DIFF , INT ,DOUBLE , CHAR , STRUCT , VOID , IF , ELSE , WHILE , RETURN , FOR , BREAK}; // tokens codes 
  
 typedef struct _Token{ 
  int   code;     // code (name) 
@@ -684,6 +684,20 @@ int  getNextToken()
         return RETURN;
       }
 
+      if(strcmp(text,"for")==0)
+      {
+        free(text);
+        addTk(FOR);
+        return FOR;
+      }
+
+       if(strcmp(text,"break")==0)
+      {
+        free(text);
+        addTk(BREAK);
+        return BREAK;
+      }
+
       
       
       //altfel ii id normal
@@ -769,7 +783,7 @@ const char *codeName(int code)
     }
 }
 
-void printTokens(const Token *tk) //trec prin token list si print line number , token type si token value 
+void printTokens(const Token *tk)  
 {
     while (tk) {
         printf("%d\t%s", tk->line, codeName(tk->code));
@@ -861,7 +875,7 @@ int varDef()
       
     arrayDecl(); //in caz ca e array
 
-    if(!consume(SEMICOLON)) //sa aiba ; la final
+    if(!consume(SEMICOLON)) //sa aibe ; la final
      tkerr(crtTk , "missing ;");
 
     return 1;
@@ -870,33 +884,31 @@ int varDef()
 
 
 int structDef()
-{
+{   
+      Token *startTk = crtTk;
+
     if(!consume(STRUCT)) 
      return 0;
     
     if(!consume(ID))  //dupa type trebuie sa avem nume
-      tkerr(crtTk , "missing ID");
+     {  crtTk=startTk;
+        return 0;
+    }
     
 
     if(!consume(LACC)) 
-      tkerr(crtTk , "missing {");
-
-    while(1)
     {
-        if(varDef())
-        {
-            //keep consuming
-        }
-        else break;
+        crtTk = startTk;
+        return 0;
     }
 
+     while(varDef());
+
     if(!consume(RACC))
-       tkerr(crtTk , "missing }");
+        tkerr(crtTk, "missing }");
 
-     
-
-    if(!consume(SEMICOLON)) //sa aiba ; la final
-     tkerr(crtTk , "missing ;");
+    if(!consume(SEMICOLON))
+        tkerr(crtTk, "missing ;");
 
     return 1;
 
@@ -970,7 +982,7 @@ int fnDef()
 
     // )
     if (!consume(RPAR))
-        tkerr(crtTk, "missing )");
+        tkerr(crtTk, "missing ) ");
 
     // function body
     if (!stmCompound())
@@ -1039,6 +1051,54 @@ int stm()  //statement
         return 1;
      }
 
+    //FOR
+     if(consume(FOR))
+     {
+        if(!consume(LPAR))
+        {
+              tkerr(crtTk, "missing ( after for ");
+        }
+
+        expr();
+        if(!consume(SEMICOLON))
+        {
+             tkerr(crtTk, "missing ; inside for ");
+        }
+
+        expr();
+
+        if(!consume(SEMICOLON))
+        {
+             tkerr(crtTk, "missing ; inside for ");
+        }
+
+        expr();
+
+        if(!consume(RPAR))
+        {
+            
+             tkerr(crtTk, "missing ) after for ");
+
+        }
+
+        if(!stm())
+        {
+            tkerr(crtTk, "missing statement after for");
+        }
+        return 1;
+
+     }
+
+     //BREAK
+     if(consume(BREAK))
+     {
+        
+        if(!consume(SEMICOLON))
+        {
+             tkerr(crtTk, "missing ; after break ");
+        }
+        return 1;
+     }
 
      //return
      if(consume(RETURN))
@@ -1073,10 +1133,14 @@ int unit()
 {
     while (1) {
         Token *startTk = crtTk; 
-
+        
         if (structDef()) continue;
+         crtTk=startTk;
         if (fnDef()) continue;
+        crtTk=startTk;
         if (varDef()) continue;
+        crtTk=startTk;
+        
 
         if (crtTk == startTk) break; //daca nu a mers nici struct nici functie nici variabila  , nu putem sa parsam nimic 
     }
