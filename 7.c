@@ -1,6 +1,7 @@
 void main()
 {
-	double	r,pi;
+	double	r;
+	double pi;
 	pi=3.14;
 	put_s("r=");
 	r=get_d();

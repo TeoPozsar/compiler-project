@@ -1,6 +1,7 @@
 void main()
 {
-	int		i,n;
+	int		i;
+	int n;
 	double	s;
 	s=0.0;
 	put_s("n=");
